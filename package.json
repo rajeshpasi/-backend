@@ -1,0 +1,26 @@
+{
+  "name": "mon",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon -r dotenv/config  --experimental-json-modules src/index.js"
+  },
+  "keywords": [
+    "javascript",
+    "react",
+    "node",
+    "express"
+  ],
+  "author": "Rajesh",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mongoose": "^8.14.2"
+  }
+}

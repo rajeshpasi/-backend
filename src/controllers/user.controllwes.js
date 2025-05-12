@@ -3,22 +3,25 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessTokenAndRefreshToken = async (userId, res) => {
-try {
-  const user = await User.findById(userId);
-  const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
 
-  // store refresh token in db
-  user.refreshToken = refreshToken;
-  await user.save({validateBeforeSave: false});
+    // store refresh token in db
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
 
-  return {accessToken, refreshToken};
-
-} catch (error) {
-  throw new ApiError(500, "Something went wrong while generating access token and refresh token");
-}
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating access token and refresh token"
+    );
+  }
 };
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -96,12 +99,12 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  // req body -> data 
-// username or email 
-//find the user 
-//password check 
-//access and referesh token 
-//send cookie
+  // req body -> data
+  // username or email
+  //find the user
+  //password check
+  //access and referesh token
+  //send cookie
   const { email, username, password } = req.body;
   if (!email && !username) {
     throw new ApiError(400, "Username or email is required");
@@ -109,8 +112,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({
     $or: [{ username }, { email }],
-    
-  })
+  });
   if (!user) {
     throw new ApiError(400, "Invalid username or email");
   }
@@ -120,25 +122,33 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid password");
   }
 
-  const {accessToken, refreshToken} = await generateAccessTokenAndRefreshToken(user._id, res);
+  const { accessToken, refreshToken } =
+    await generateAccessTokenAndRefreshToken(user._id, res);
 
-  const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
 
   const options = {
     httpOnly: true,
     secure: true,
-    
   };
 
-  return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json(new ApiResponse(200, {user: loggedInUser, accessToken, refreshToken},"User logged in successfully"));
-  
-  
-
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        { user: loggedInUser, accessToken, refreshToken },
+        "User logged in successfully"
+      )
+    );
 });
 
-
 const logoutUser = asyncHandler(async (req, res) => {
-  await user.findByIdAndUpdate(
+  await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: {
@@ -155,12 +165,75 @@ const logoutUser = asyncHandler(async (req, res) => {
     secure: true,
   };
 
-  return res.status(200)
-  .clearCookie("accessToken", options)
-  .clearCookie("refreshToken", options)
-  .json(new ApiResponse(200, {}, "User logged out successfully"));
-  
-})
-    
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
+});
 
-export { registerUser, loginUser, logoutUser };
+/*
+यह कोड एक्सेस टोकन को रिफ्रेश करने का काम करता है। चलिए इसे स्टेप बाय स्टेप समझते हैं:
+
+कार्यप्रणाली:
+1. यूजर से रिफ्रेश टोकन प्राप्त करता है (कुकीज या रिक्वेस्ट बॉडी से)
+2. टोकन की वैधता जांचता है 
+3. टोकन से यूजर की पहचान करता है
+4. नए एक्सेस और रिफ्रेश टोकन जनरेट करता है
+5. नए टोकन कुकीज में सेट करके रिस्पांस भेजता है
+
+प्रयुक्त फंक्शन्स:
+- asyncHandler: एसिंक्रोनस एरर हैंडलिंग के लिए
+- jwt.verify(): JWT टोकन को वेरिफाई करने के लिए
+- User.findById(): डेटाबेस से यूजर खोजने के लिए
+- generateAccessTokenAndRefreshToken(): नए टोकन जनरेट करने के लिए
+- ApiError: एरर हैंडलिंग के लिए
+- ApiResponse: सफल रिस्पांस भेजने के लिए
+
+सुधार के सुझाव:
+1. refreshToken की स्पेलिंग सही करें (referesh -> refresh)
+2. एरर मैसेज को और स्पष्ट बनाएं
+3. टोकन एक्सपायरी की एक्सप्लिसिट चेकिंग जोड़ें
+*/
+
+const refereshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+  
+    const user = await User.findById(decodedToken.id);
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+  
+    // check if refresh token is expired
+    if (user.refreshToken !== incomingRefreshToken) {
+      throw new ApiError(401, "refresh token is expired");
+    }
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    const { accessToken, newRefreshToken } =
+      await generateAccessTokenAndRefreshToken(user._id, res);
+  
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(new ApiResponse(200, {accessToken, refreshToken: newRefreshToken}, "Access token refreshed successfully"));
+  } catch (error) {
+    throw new ApiError(401, error.message || "Invalid refresh token");
+  }
+});
+
+export { registerUser, loginUser, logoutUser, refereshAccessToken };

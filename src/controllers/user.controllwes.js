@@ -236,4 +236,118 @@ const refereshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, refereshAccessToken };
+/*
+changeCurrentUserPassword(): For changing password
+- Gets old and new password from req.body
+- Finds user from database
+- Checks old password
+- Sets new password
+- Saves updated user
+
+Improvement suggestions:
+1. Add password validation
+2. Add password hashing
+3. Send response on successful update
+*/
+
+const changeCurrentUserPassword = asyncHandler(async (req, res) => {
+  const {oldPassword, newPassword} = req.body;
+  const user = await User.findById(req.user?._id); // Finding user from database using logged in user's ID
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
+
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Old password is incorrect");
+  }
+
+  user.password = newPassword;
+  await user.save({validateBeforeSave: false});
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password updated successfully"));
+});
+
+/*
+getCurrentUser(): For getting current logged in user details
+- Gets user from req.user (set by auth middleware)
+- Returns user details in response
+*/
+const getCurrentUser = asyncHandler(async (req, res) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+});
+
+/*
+updateCurrentUser(): For updating current logged in user details
+- Gets fullName and email from req.body
+- Finds user from database
+- Updates user details
+- Returns updated user details in response
+*/
+const updateCurrentUser = asyncHandler(async (req, res) => {
+  const {fullName, email} = req.body;
+  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {fullName, email}}, {new: true}).select("-password");
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Current user updated successfully"));
+});
+
+/*
+updateUserAvatar(): For updating user avatar
+- Gets avatar from req.file
+- Uploads avatar to cloudinary
+- Updates user avatar in database
+- Returns updated user details in response
+*/
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const avatarImage = req.file?.path;
+  if (!avatarImage) {
+    throw new ApiError(400, "Avatar is required");
+  }
+  const avatar = await uploadOnCloudinary(avatarImage);
+  if (!avatar.url) {
+    throw new ApiError(400, "Failed to upload avatar");
+  }
+  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {avatar: avatar.url}}, {new: true}).select("-password");
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Avatar updated successfully"));
+});
+
+/*
+updateUserCoverImage(): For updating user cover image
+- Gets cover image from req.file
+- Uploads cover image to cloudinary
+- Updates user cover image in database
+- Returns updated user details in response
+*/
+const updateUserCoverImage = asyncHandler(async (req, res) => {
+  const coverImage = req.file?.path;
+  if (!coverImage) {
+    throw new ApiError(400, "Cover image is required");
+  }
+  const cover = await uploadOnCloudinary(coverImage);
+  if (!cover.url) {
+    throw new ApiError(400, "Failed to upload cover image");
+  }
+  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {coverImage: cover.url}}, {new: true}).select("-password");
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Cover image updated successfully"));
+});
+
+
+export { registerUser, loginUser, logoutUser, refereshAccessToken, changeCurrentUserPassword, getCurrentUser, updateCurrentUser, updateUserAvatar, updateUserCoverImage };

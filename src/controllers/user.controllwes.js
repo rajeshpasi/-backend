@@ -209,12 +209,12 @@ const refereshAccessToken = asyncHandler(async (req, res) => {
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
-  
+
     const user = await User.findById(decodedToken.id);
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
     }
-  
+
     // check if refresh token is expired
     if (user.refreshToken !== incomingRefreshToken) {
       throw new ApiError(401, "refresh token is expired");
@@ -225,12 +225,18 @@ const refereshAccessToken = asyncHandler(async (req, res) => {
     };
     const { accessToken, newRefreshToken } =
       await generateAccessTokenAndRefreshToken(user._id, res);
-  
+
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
       .cookie("refreshToken", newRefreshToken, options)
-      .json(new ApiResponse(200, {accessToken, refreshToken: newRefreshToken}, "Access token refreshed successfully"));
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken, refreshToken: newRefreshToken },
+          "Access token refreshed successfully"
+        )
+      );
   } catch (error) {
     throw new ApiError(401, error.message || "Invalid refresh token");
   }
@@ -251,7 +257,7 @@ Improvement suggestions:
 */
 
 const changeCurrentUserPassword = asyncHandler(async (req, res) => {
-  const {oldPassword, newPassword} = req.body;
+  const { oldPassword, newPassword } = req.body;
   const user = await User.findById(req.user?._id); // Finding user from database using logged in user's ID
   if (!user) {
     throw new ApiError(400, "User not found");
@@ -263,7 +269,7 @@ const changeCurrentUserPassword = asyncHandler(async (req, res) => {
   }
 
   user.password = newPassword;
-  await user.save({validateBeforeSave: false});
+  await user.save({ validateBeforeSave: false });
 
   return res
     .status(200)
@@ -289,8 +295,12 @@ updateCurrentUser(): For updating current logged in user details
 - Returns updated user details in response
 */
 const updateCurrentUser = asyncHandler(async (req, res) => {
-  const {fullName, email} = req.body;
-  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {fullName, email}}, {new: true}).select("-password");
+  const { fullName, email } = req.body;
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    { $set: { fullName, email } },
+    { new: true }
+  ).select("-password");
   if (!user) {
     throw new ApiError(400, "User not found");
   }
@@ -315,7 +325,11 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   if (!avatar.url) {
     throw new ApiError(400, "Failed to upload avatar");
   }
-  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {avatar: avatar.url}}, {new: true}).select("-password");
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    { $set: { avatar: avatar.url } },
+    { new: true }
+  ).select("-password");
   if (!user) {
     throw new ApiError(400, "User not found");
   }
@@ -340,7 +354,11 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   if (!cover.url) {
     throw new ApiError(400, "Failed to upload cover image");
   }
-  const user = await User.findByIdAndUpdate(req.user?._id, {$set: {coverImage: cover.url}}, {new: true}).select("-password");
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    { $set: { coverImage: cover.url } },
+    { new: true }
+  ).select("-password");
   if (!user) {
     throw new ApiError(400, "User not found");
   }
@@ -350,4 +368,84 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 });
 
 
-export { registerUser, loginUser, logoutUser, refereshAccessToken, changeCurrentUserPassword, getCurrentUser, updateCurrentUser, updateUserAvatar, updateUserCoverImage };
+const getUserChannelProfile = asyncHandler(async (req, res) => { 
+
+  const { username } = req.params;    //Getting username from request parameters 
+
+//Checking if username is present in request parameters
+  if (!username?.trim()) {  
+    throw new ApiError(400, "username is missing");
+  }
+
+  //Aggregating user details from database
+  const channel = await User.aggregate([
+    {
+      // matching username with username in database
+      $match: { username: username.toLowerCase() }, 
+      //lookup is used to join the current collection with the referenced collection
+      $lookup: {
+        from: "Subscription",   //Subscription is the collection name
+        localField: "_id",  //local field is the field in the current collection
+        foreignField: "channel", //foreign field is the field in the referenced collection
+        as: "subscribers", //subscribers is the name of the new field that will store the subscribers
+      },
+      //lookup is used to join the current collection with the referenced collection
+      $lookup: {
+        from: "Subscription", //Subscription is the collection name
+        localField: "_id", //local field is the field in the current collection
+        foreignField: "subscriber", //foreign field is the field in the referenced collection
+        as: "subscribersTo", //subscribersTo is the name of the new field that will store the subscribersTo
+      },
+    },
+    //adding fields to the aggregated result
+    {
+      //adding fields to the aggregated result
+      $addFields: {
+        subscribersCount: { $size: "$subscribers" }, //subscribersCount is the name of the new field that will store the subscribersCount
+        channelsSubscribedToCount: { $size: "$subscribersTo" }, //channelsSubscribedToCount is the name of the new field that will store the channelsSubscribedToCount
+        //checking if the user is subscribed to the channel
+        isSubscribed: {
+          //checking if the user is subscribed to the channel
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] }, //checking if the user is subscribed to the channel
+            then: true, //if the user is subscribed to the channel then the value is true
+            else: false, //if the user is not subscribed to the channel then the value is false
+          },
+        },
+      },
+    },
+    //projecting the fields to the aggregated result
+    {
+      $project: {
+        _id: 1, //_id is the field in the current collection
+        username: 1, //username is the field in the current collection
+        fullName: 1, //fullName is the field in the current collection
+        subscribersCount: 1, //subscribersCount is the field in the current collection
+        channelsSubscribedToCount: 1, //channelsSubscribedToCount is the field in the current collection
+        isSubscribed: 1, //isSubscribed is the field in the current collection
+        avatar: 1, //avatar is the field in the current collection
+        coverImage: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) {
+    throw new ApiError(400, "Channel not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "Channel fetched successfully"));
+});
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refereshAccessToken,
+  changeCurrentUserPassword,
+  getCurrentUser,
+  updateCurrentUser,
+  updateUserAvatar,
+  updateUserCoverImage,
+  getUserChannelProfile,
+};

@@ -2,7 +2,7 @@ import mongoose, { isValidObjectId } from "mongoose";
 import asyncHandler from "express-async-handler.js";
 import { Comment } from "../models/comment.model.js";
 import { ApiError } from "../utils/error.js";
-import { ApiResponse } from "../utils/apiResponse.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
 
 const getVideoComments = asyncHandler(async (req, res) => {
   //TODO: get all comments for a video

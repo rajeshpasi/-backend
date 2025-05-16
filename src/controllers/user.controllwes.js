@@ -2,7 +2,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken";
 
 const generateAccessTokenAndRefreshToken = async (userId, res) => {
@@ -152,7 +152,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     req.user._id,
     {
       $unset: {
-        refreshToken: 1
+        refreshToken: 1,
       },
     },
     {
@@ -455,22 +455,22 @@ const getWatchHistory = asyncHandler(async (req, res) => {
               as: "owner",
               pipeline: [
                 {
-                  $project:{
+                  $project: {
                     fullName: 1,
                     username: 1,
-                    avatar: 1
-                  }
-                }
-              ]
+                    avatar: 1,
+                  },
+                },
+              ],
             },
           },
           {
-            $addFields:{
+            $addFields: {
               owner: {
                 $first: "$owner",
-              }
-            }
-          }
+              },
+            },
+          },
         ],
       },
     },
@@ -482,7 +482,13 @@ const getWatchHistory = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
 });
 
 export {

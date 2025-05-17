@@ -10,14 +10,14 @@ cloudinary.config({
 
 const uploadOnCloudinary = async (localFilePath) => {
   try {
-    if (!localFilePath) return null
+    if (!localFilePath) return null;
     // Upload the file on cloudinary
     const response = await cloudinary.uploader.upload(localFilePath, {
       resource_type: "auto",
     });
     // file has been uploaded successfully on cloudinary
     // console.log("File is uploaded on cloudinary", response.url);
-    
+
     // file has been uploaded successfully on cloudinary
     // remove the locally stored file
     fs.unlinkSync(localFilePath);
@@ -29,4 +29,16 @@ const uploadOnCloudinary = async (localFilePath) => {
   }
 };
 
-export { uploadOnCloudinary };
+const deleteFromCloudinary = async (public_id) => {
+  try {
+    if (!public_id) return null;
+
+    const response = await cloudinary.uploader.destroy(public_id);
+    return response;
+  } catch (error) {
+    console.error("Cloudinary error on deleting assert:", error);
+    return null;
+  }
+};
+
+export { uploadOnCloudinary, deleteFromCloudinary };
